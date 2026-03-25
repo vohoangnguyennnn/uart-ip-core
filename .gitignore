@@ -1,0 +1,33 @@
+# =========================
+# Vivado 
+# =========================
+*.cache/
+*.hw/
+*.ip_user_files/
+*.runs/
+*.sim/
+*.gen/
+*.xpr
+*.jou
+*.log
+*.str
+
+# build outputs
+*.bit
+*.bin
+*.ltx
+*.wdb
+*.wcfg
+
+# simulation
+work/
+*.wlf
+*.vcd
+*.vpd
+*.fsdb
+transcript
+
+# vscode / OS
+.vscode/
+.DS_Store
+Thumbs.db
