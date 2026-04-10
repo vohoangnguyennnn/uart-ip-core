@@ -22,13 +22,14 @@ module uart_tx (
     input  wire       rst,
     input  wire       baud_tick,
     input  wire [7:0] ext_data_in,
-    input  wire       tx_start,   // pulse high for 1 cycle to begin a transmission
+    input  wire       tx_start,
     output reg        tx,
-    output wire       tx_busy     // high while a frame is being transmitted
+    output wire       tx_busy
 );
 
-    // tx_busy: any state other than IDLE means we are transmitting
-    assign tx_busy = (state != IDLE);
+    reg [1:0] state, next_state;
+
+
 
     // FSM states
     localparam IDLE  = 2'd0;
@@ -36,7 +37,9 @@ module uart_tx (
     localparam DATA  = 2'd2;
     localparam STOP  = 2'd3;
 
-    reg [1:0] state, next_state;
+    assign tx_busy = (state != IDLE);
+
+
 
 
     // counters
@@ -60,7 +63,7 @@ module uart_tx (
 
     // Combinational logic (state)
     always @(*) begin
-        // Default: stay in current state (prevents unintended state pops)
+
         next_state = state;
 
         case (state)
@@ -118,7 +121,7 @@ module uart_tx (
             case (state)
                 IDLE:  tx <= 1'b1;
                 START: tx <= 1'b0;
-                DATA:  tx <= shift_reg[0];   // LSB-first: always output bit[0]
+                DATA:  tx <= shift_reg[0];   // LSB-first
                 STOP:  tx <= 1'b1;
                 default: tx <= 1'b1;
             endcase
