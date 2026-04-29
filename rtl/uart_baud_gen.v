@@ -1,17 +1,5 @@
-// =============================================================================
-// Module      : uart_baud_gen
-// Description : Baud rate generator. Produces a single-cycle tick at 16× the
-//               target baud rate. The 16× oversampling clock is consumed by
-//               uart_tx and uart_rx for precise bit timing and mid-bit sampling.
-// Formula     : baud_division = clk_freq / (baud_rate × 16)
-// Example     : 50 MHz, 115200 baud → baud_division = 50_000_000 / (115200×16) ≈ 27
-// Ports:
-//   clk           - System clock
-//   rst           - Synchronous active-high reset
-//   baud_division - Clock divider value (set before asserting en)
-//   en            - Enable the counter; rising edge resets the counter phase
-//   baud_tick     - Single-cycle pulse at 16× baud rate
-// =============================================================================
+
+
 module uart_baud_gen (
     input  wire        clk,
     input  wire        rst,
@@ -22,8 +10,6 @@ module uart_baud_gen (
 
     reg [31:0] baud_count;
     reg        en_d;
-
-    // edge detect
     always @(posedge clk) begin
         if (rst)
             en_d <= 0;
@@ -32,15 +18,13 @@ module uart_baud_gen (
     end
 
     wire en_q = en & ~en_d;
-
-    // baud counter
     always @(posedge clk) begin
         if (rst) begin
             baud_count <= 0;
             baud_tick  <= 0;
         end
         else begin
-            baud_tick <= 0;   // default
+            baud_tick <= 0;
 
             if (!en || baud_division == 0) begin
                 baud_count <= 0;
