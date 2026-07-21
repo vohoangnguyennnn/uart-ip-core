@@ -22,13 +22,10 @@ if {$TOP == "uart_baud_gen_tb"} {
     add wave -label en $TB/en
     add wave -label baud_division -radix unsigned $TB/baud_division
     add wave -label baud_tick $TB/baud_tick
-    add wave -label cycle_count -radix unsigned $TB/cycle_count
-    add wave -label tick_interval -radix unsigned $TB/tick_interval
+    add wave -label tick_count -radix unsigned $TB/tick_count
 
     add wave -divider "DUT INTERNAL"
-    add wave -label baud_count -radix unsigned $TB/u_dut/baud_count
-    add wave -label dut_baud_tick $TB/u_dut/baud_tick
-    add wave -label en_d $TB/u_dut/en_d
+    add wave -label baud_count -radix unsigned $TB/dut/baud_count
 }
 
 if {$TOP == "uart_tx_tb"} {
@@ -85,6 +82,8 @@ if {$TOP == "uart_top_tb"} {
     add wave -label tx_data -radix hexadecimal $TB/dut/tx_data
     add wave -label rx_data -radix hexadecimal $TB/dut/rx_data
     add wave -label frame_error $TB/dut/frame_error
+    add wave -label rx_ready $TB/dut/rx_ready
+    add wave -label frame_error_sticky $TB/dut/frame_error_sticky
     add wave -label baud_tick $TB/dut/baud_tick
     add wave -label tx_start $TB/dut/tx_start
 

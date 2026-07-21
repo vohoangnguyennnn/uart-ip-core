@@ -97,7 +97,8 @@ module uart_top_tb;
 
     task send_and_expect_loopback;
         input [7:0] data;
-        input       test_busy_write;
+        input       attempt_busy_write;
+        input [7:0] rejected_data;
         integer events_before;
         integer cycles;
         reg [31:0] value;
@@ -106,9 +107,10 @@ module uart_top_tb;
             write_register(TX_DATA, {24'd0, data});
             wait_for_tx_busy(1'b1);
 
-            // A second write while busy must not replace the active byte.
-            if (test_busy_write)
-                write_register(TX_DATA, {24'd0, ~data});
+            // An optional second write verifies that the active frame cannot
+            // be replaced while the transmitter is busy.
+            if (attempt_busy_write)
+                write_register(TX_DATA, {24'd0, rejected_data});
 
             cycles = 0;
             while (rx_event_count == events_before && cycles < 10000) begin
@@ -166,15 +168,20 @@ module uart_top_tb;
         if (value[3:0] !== 4'b0001)
             $fatal(1, "Unexpected status after enable: %04b", value[3:0]);
 
-        send_and_expect_loopback(8'hA5, 1'b1);
-        send_and_expect_loopback(8'h00, 1'b0);
-        send_and_expect_loopback(8'hFF, 1'b0);
+        // Clean loopback frames used for protocol and waveform inspection.
+        send_and_expect_loopback(8'hA5, 1'b0, 8'h00);
+        send_and_expect_loopback(8'h5A, 1'b0, 8'h00);
+        send_and_expect_loopback(8'h00, 1'b0, 8'h00);
+        send_and_expect_loopback(8'hFF, 1'b0, 8'h00);
+
+        // Separate busy-write test: C3 must be rejected while 3C is active.
+        send_and_expect_loopback(8'h3C, 1'b1, 8'hC3);
 
         read_register(STATUS, value);
         if (value[3:0] !== 4'b0001)
             $fatal(1, "Unexpected final UART status: %04b", value[3:0]);
 
-        $display("[PASS] uart_top_tb: register interface and TX-to-RX loopback");
+        $display("[PASS] uart_top_tb: register loopback and busy-write protection");
         $finish;
     end
 
