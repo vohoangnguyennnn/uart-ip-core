@@ -1,3 +1,5 @@
+`timescale 1ns/1ps
+
 // =============================================================================
 // Module      : uart_tx
 // Description : UART transmitter. On a tx_start rising edge it latches the
@@ -84,48 +86,48 @@ module uart_tx (
 
 
     // ---- Counters + shift register ----
+    // A new byte is accepted independently of baud_tick. This is important
+    // because tx_start belongs to the system-clock interface, while baud_tick
+    // can occur at any phase relative to it.
     always @(posedge clk) begin
         if (rst) begin
-            bit_tick_cnt <= 0;
-            bit_cnt      <= 0;
-            shift_reg    <= 0;
+            bit_tick_cnt <= 4'd0;
+            bit_cnt      <= 3'd0;
+            shift_reg    <= 8'd0;
+        end
+        else if (state == IDLE) begin
+            bit_tick_cnt <= 4'd0;
+            bit_cnt      <= 3'd0;
+
+            if (tx_start_rise)
+                shift_reg <= ext_data_in;
         end
         else if (baud_tick) begin
-            if (state == IDLE && tx_start_rise) begin
-                bit_tick_cnt <= 0;
-                bit_cnt      <= 0;
-                shift_reg    <= ext_data_in;   // latch data on start
+            if (bit_tick_done) begin
+                bit_tick_cnt <= 4'd0;
+
+                if (state == DATA) begin
+                    bit_cnt   <= bit_cnt + 1'b1;
+                    shift_reg <= {1'b0, shift_reg[7:1]};
+                end
             end
             else begin
-                if (bit_tick_done) begin
-                    bit_tick_cnt <= 0;
-
-                    if (state == DATA) begin
-                        bit_cnt   <= bit_cnt + 1;
-                        shift_reg <= {1'b0, shift_reg[7:1]};  // LSB-first shift
-                    end
-                end
-                else begin
-                    bit_tick_cnt <= bit_tick_cnt + 1;
-                end
+                bit_tick_cnt <= bit_tick_cnt + 1'b1;
             end
         end
     end
 
 
     // ---- TX output ----
-    always @(posedge clk) begin
-        if (rst)
-            tx <= 1'b1;
-        else begin
-            case (state)
-                IDLE:    tx <= 1'b1;       // idle line HIGH
-                START:   tx <= 1'b0;       // start bit LOW
-                DATA:    tx <= shift_reg[0]; // LSB-first
-                STOP:    tx <= 1'b1;       // stop bit HIGH
-                default: tx <= 1'b1;
-            endcase
-        end
+    // The serial value is a direct decode of the current frame state.
+    always @(*) begin
+        case (state)
+            IDLE:    tx = 1'b1;
+            START:   tx = 1'b0;
+            DATA:    tx = shift_reg[0];
+            STOP:    tx = 1'b1;
+            default: tx = 1'b1;
+        endcase
     end
 
 endmodule

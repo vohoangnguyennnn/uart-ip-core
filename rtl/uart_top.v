@@ -1,5 +1,21 @@
+`timescale 1ns/1ps
 
-
+// =============================================================================
+// Module      : uart_top
+// Description : Small memory-mapped wrapper around the educational UART 8N1
+//               transmitter, receiver, and 16x baud generator.
+//
+// Register map:
+//   0 - BAUD_DATA : oversampling divider
+//   1 - STATUS/ENABLE
+//       write bit 0: enable
+//       read  bit 0: enable
+//             bit 1: TX busy
+//             bit 2: RX data ready (sticky)
+//             bit 3: frame error (sticky, cleared by a status read)
+//   2 - TX_DATA   : write byte to transmit; ignored while busy/disabled
+//   3 - RX_DATA   : read received byte; clears RX data-ready status
+// =============================================================================
 module uart_top (
     input  wire        clk,
     input  wire        rst,
@@ -27,6 +43,12 @@ module uart_top (
     wire       baud_tick;
     wire       frame_error;
     reg        tx_start;
+    reg        rx_ready;
+    reg        frame_error_sticky;
+
+    // Disabling the UART aborts any partial frame and returns TX/RX to idle.
+    wire core_rst = rst || !enable;
+
     always @(posedge clk) begin
         if (rst) begin
             baud_division <= 32'd0;
@@ -41,21 +63,43 @@ module uart_top (
                     BAUD_DATA: baud_division <= write_data;
                     ENABLE:    enable        <= write_data[0];
                     TX_DATA: begin
-                        tx_data  <= write_data[7:0];
-                        tx_start <= 1'b1;
+                        if (enable && !tx_busy) begin
+                            tx_data  <= write_data[7:0];
+                            tx_start <= 1'b1;
+                        end
                     end
                     default: ;
                 endcase
             end
         end
     end
+
+    // Convert the one-clock RX event pulses into software-visible status.
+    always @(posedge clk) begin
+        if (rst || !enable) begin
+            rx_ready           <= 1'b0;
+            frame_error_sticky <= 1'b0;
+        end
+        else begin
+            if (rx_valid)
+                rx_ready <= 1'b1;
+            else if (re && address == RX_DATA)
+                rx_ready <= 1'b0;
+
+            if (frame_error)
+                frame_error_sticky <= 1'b1;
+            else if (re && address == ENABLE)
+                frame_error_sticky <= 1'b0;
+        end
+    end
+
     always @(posedge clk) begin
         if (rst)
             read_data <= 32'd0;
         else if (re) begin
             case (address)
                 BAUD_DATA: read_data <= baud_division;
-                ENABLE:    read_data <= {28'd0, frame_error, rx_valid, tx_busy, enable};
+                ENABLE:    read_data <= {28'd0, frame_error_sticky, rx_ready, tx_busy, enable};
                 TX_DATA:   read_data <= {24'd0, tx_data};
                 RX_DATA:   read_data <= {24'd0, rx_data};
                 default:   read_data <= 32'd0;
@@ -71,7 +115,7 @@ module uart_top (
     );
     uart_tx tx_core (
         .clk         (clk),
-        .rst         (rst),
+        .rst         (core_rst),
         .baud_tick   (baud_tick),
         .ext_data_in (tx_data),
         .tx_start    (tx_start),
@@ -80,7 +124,7 @@ module uart_top (
     );
     uart_rx rx_core (
         .clk          (clk),
-        .rst          (rst),
+        .rst          (core_rst),
         .baud_tick    (baud_tick),
         .rx           (rx),
         .ext_data_out (rx_data),
@@ -89,4 +133,3 @@ module uart_top (
     );
 
 endmodule
-

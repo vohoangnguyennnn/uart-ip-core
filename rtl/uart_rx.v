@@ -1,5 +1,11 @@
+`timescale 1ns/1ps
 
-
+// =============================================================================
+// Module      : uart_rx
+// Description : UART 8N1 receiver using a 16x oversampling tick. The start bit
+//               is validated at its midpoint; data and stop bits are then
+//               sampled once per bit period at their midpoints.
+// =============================================================================
 module uart_rx (
     input  wire       clk,
     input  wire       rst,
@@ -12,6 +18,7 @@ module uart_rx (
 
     reg rx_d1, rx_d2;
 
+    // Two-flop synchronizer for the asynchronous RX input.
     always @(posedge clk) begin
         if (rst) begin
             rx_d1 <= 1'b1;
@@ -47,8 +54,8 @@ module uart_rx (
         case (state)
             IDLE:  if (!rx_d2) next_state = START;
 
-            START: if (baud_tick && half_tick && !rx_d2)
-                       next_state = DATA;
+            START: if (baud_tick && half_tick)
+                       next_state = rx_d2 ? IDLE : DATA;
 
             DATA:  if (baud_tick && bit_tick_done && byte_done)
                        next_state = STOP;
@@ -61,32 +68,59 @@ module uart_rx (
             default: next_state = IDLE;
         endcase
     end
+    // Oversampling counter and receive shift register.
     always @(posedge clk) begin
         if (rst) begin
-            bit_tick_cnt <= 0;
-            bit_cnt      <= 0;
-            shift_reg    <= 0;
+            bit_tick_cnt <= 4'd0;
+            bit_cnt      <= 3'd0;
+            shift_reg    <= 8'd0;
+        end
+        else if (state == IDLE) begin
+            bit_tick_cnt <= 4'd0;
+            bit_cnt      <= 3'd0;
         end
         else if (baud_tick) begin
-            if (state == IDLE) begin
-                bit_tick_cnt <= 0;
-                bit_cnt      <= 0;
-            end
-            else begin
-                if (bit_tick_done)
-                    bit_tick_cnt <= 0;
-                else
-                    bit_tick_cnt <= bit_tick_cnt + 1;
-
-                if (state == DATA && bit_tick_done) begin
-                    bit_cnt   <= bit_cnt + 1;
-
-                    shift_reg <= {rx_d2, shift_reg[7:1]};
+            case (state)
+                START: begin
+                    if (half_tick)
+                        // Begin a complete bit period after validating START.
+                        bit_tick_cnt <= 4'd0;
+                    else
+                        bit_tick_cnt <= bit_tick_cnt + 1'b1;
                 end
-            end
+
+                DATA: begin
+                    if (bit_tick_done) begin
+                        bit_tick_cnt <= 4'd0;
+                        shift_reg    <= {rx_d2, shift_reg[7:1]};
+
+                        if (byte_done)
+                            bit_cnt <= 3'd0;
+                        else
+                            bit_cnt <= bit_cnt + 1'b1;
+                    end
+                    else begin
+                        bit_tick_cnt <= bit_tick_cnt + 1'b1;
+                    end
+                end
+
+                STOP: begin
+                    if (bit_tick_done)
+                        bit_tick_cnt <= 4'd0;
+                    else
+                        bit_tick_cnt <= bit_tick_cnt + 1'b1;
+                end
+
+                default: begin
+                    bit_tick_cnt <= 4'd0;
+                    bit_cnt      <= 3'd0;
+                end
+            endcase
         end
     end
 
+    // Output pulses are one system clock wide. uart_top converts them to
+    // software-visible sticky status bits.
     always @(posedge clk) begin
         if (rst) begin
             ext_data_out <= 8'd0;
