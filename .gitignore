@@ -1,5 +1,5 @@
 # =========================
-# Vivado 
+# Vivado
 # =========================
 *.cache/
 *.hw/
@@ -19,13 +19,18 @@
 *.wdb
 *.wcfg
 
-# simulation
+# =========================
+# QuestaSim
+# =========================
 work/
+modelsim.ini
+transcript
+qwave.db/
 *.wlf
+*.out
 *.vcd
 *.vpd
 *.fsdb
-transcript
 
 # vscode / OS
 .vscode/
