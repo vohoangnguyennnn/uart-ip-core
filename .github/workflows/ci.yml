@@ -1,0 +1,62 @@
+name: RTL CI
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  lint-and-test:
+    name: Lint and run testbenches
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Install open-source simulators
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes iverilog verilator
+
+      - name: Lint RTL with Verilator
+        run: |
+          verilator --lint-only --Wall \
+            --top-module uart_top \
+            rtl/uart_baud_gen.v \
+            rtl/uart_tx.v \
+            rtl/uart_rx.v \
+            rtl/uart_top.v
+
+      - name: Run self-checking testbenches with Icarus Verilog
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p build/iverilog
+
+          testbenches=(
+            uart_baud_gen_tb
+            uart_tx_tb
+            uart_rx_tb
+            uart_top_tb
+          )
+
+          for tb in "${testbenches[@]}"; do
+            echo "==> Running ${tb}"
+
+            iverilog -g2012 -Wall \
+              -s "${tb}" \
+              -o "build/iverilog/${tb}.vvp" \
+              rtl/uart_baud_gen.v \
+              rtl/uart_tx.v \
+              rtl/uart_rx.v \
+              rtl/uart_top.v \
+              "testbench/${tb}.v"
+
+            vvp "build/iverilog/${tb}.vvp" | tee "build/iverilog/${tb}.log"
+            grep -Fq "[PASS]" "build/iverilog/${tb}.log"
+          done
