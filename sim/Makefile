@@ -5,6 +5,7 @@
 #   make TB=uart_tx_tb      — compile & run TX testbench
 #   make TB=uart_rx_tb      — compile & run RX testbench
 #   make TB=uart_top_tb     — compile & run top-level testbench
+#   make TB=uart_regression_tb — run directed bug regressions
 #   make test               — run the complete self-checking test suite
 #   make wave TB=<name>     — open waveform viewer
 #   make clean              — remove all generated files
@@ -26,7 +27,7 @@ TB_DIR = ../testbench
 
 # Default testbench — override with: make TB=uart_tx_tb
 TB = uart_baud_gen_tb
-TBS = uart_baud_gen_tb uart_tx_tb uart_rx_tb uart_top_tb
+TBS = uart_baud_gen_tb uart_tx_tb uart_rx_tb uart_top_tb uart_regression_tb
 
 # =============================================================================
 # Targets
@@ -45,7 +46,7 @@ compile: work
 
 run: compile
 	$(VSIM) -c -voptargs=+acc $(TB) -l $(TB).log -do "run -all; quit -f"
-	@grep -Fq "[PASS]" $(TB).log || \
+	@grep -Fq "[PASS] $(TB)" $(TB).log || \
 		(echo "[FAIL] $(TB) did not complete successfully"; exit 1)
 
 test:
