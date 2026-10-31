@@ -11,11 +11,11 @@
 //   - Disabling the generator resets its phase.
 // =============================================================================
 module uart_baud_gen (
-    input  wire        clk,
-    input  wire        rst,
-    input  wire [31:0] baud_division,
-    input  wire        en,
-    output reg         baud_tick
+    input wire clk,
+    input wire rst,
+    input wire [31:0] baud_division,
+    input wire en,
+    output reg baud_tick
 );
 
     reg [31:0] baud_count;
@@ -23,7 +23,7 @@ module uart_baud_gen (
     always @(posedge clk) begin
         if (rst) begin
             baud_count <= 32'd0;
-            baud_tick  <= 1'b0;
+            baud_tick <= 1'b0;
         end
         else begin
             baud_tick <= 1'b0;
