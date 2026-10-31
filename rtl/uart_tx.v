@@ -43,10 +43,10 @@ module uart_tx (
 
 
     // ---- FSM states ----
-    localparam IDLE  = 2'd0;
+    localparam IDLE = 2'd0;
     localparam START = 2'd1;
-    localparam DATA  = 2'd2;
-    localparam STOP  = 2'd3;
+    localparam DATA = 2'd2;
+    localparam STOP = 2'd3;
 
     reg [1:0] state, next_state;
 
@@ -59,7 +59,7 @@ module uart_tx (
     reg [7:0] shift_reg;
 
     wire bit_tick_done = (bit_tick_cnt == 4'd15);
-    wire byte_done     = (bit_cnt == 3'd7);
+    wire byte_done = (bit_cnt == 3'd7);
 
 
     // ---- State register ----
@@ -76,10 +76,10 @@ module uart_tx (
         next_state = state;
 
         case (state)
-            IDLE:    if (tx_start_rise)                       next_state = START;
-            START:   if (baud_tick && bit_tick_done)           next_state = DATA;
-            DATA:    if (baud_tick && bit_tick_done && byte_done) next_state = STOP;
-            STOP:    if (baud_tick && bit_tick_done)           next_state = IDLE;
+            IDLE: if (tx_start_rise) next_state = START;
+            START: if (baud_tick && bit_tick_done) next_state = DATA;
+            DATA: if (baud_tick && bit_tick_done && byte_done) next_state = STOP;
+            STOP: if (baud_tick && bit_tick_done) next_state = IDLE;
             default: next_state = IDLE;
         endcase
     end
@@ -92,12 +92,12 @@ module uart_tx (
     always @(posedge clk) begin
         if (rst) begin
             bit_tick_cnt <= 4'd0;
-            bit_cnt      <= 3'd0;
-            shift_reg    <= 8'd0;
+            bit_cnt <= 3'd0;
+            shift_reg <= 8'd0;
         end
         else if (state == IDLE) begin
             bit_tick_cnt <= 4'd0;
-            bit_cnt      <= 3'd0;
+            bit_cnt <= 3'd0;
 
             if (tx_start_rise)
                 shift_reg <= ext_data_in;
@@ -107,7 +107,7 @@ module uart_tx (
                 bit_tick_cnt <= 4'd0;
 
                 if (state == DATA) begin
-                    bit_cnt   <= bit_cnt + 1'b1;
+                    bit_cnt <= bit_cnt + 1'b1;
                     shift_reg <= {1'b0, shift_reg[7:1]};
                 end
             end
@@ -119,15 +119,20 @@ module uart_tx (
 
 
     // ---- TX output ----
-    // The serial value is a direct decode of the current frame state.
-    always @(*) begin
-        case (state)
-            IDLE:    tx = 1'b1;
-            START:   tx = 1'b0;
-            DATA:    tx = shift_reg[0];
-            STOP:    tx = 1'b1;
-            default: tx = 1'b1;
-        endcase
+    // Register the pin to isolate it from combinational state-decode glitches.
+    // The serial waveform follows the state/datapath by one system clock.
+    always @(posedge clk) begin
+        if (rst)
+            tx <= 1'b1;
+        else begin
+            case (state)
+                IDLE: tx <= 1'b1;
+                START: tx <= 1'b0;
+                DATA: tx <= shift_reg[0];
+                STOP: tx <= 1'b1;
+                default: tx <= 1'b1;
+            endcase
+        end
     end
 
 endmodule

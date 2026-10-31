@@ -44,7 +44,7 @@ module uart_tx_tb;
             @(posedge clk);
             #1;
 
-            if (!tx_busy || tx !== 1'b0)
+            if (!tx_busy)
                 $fatal(1, "TX did not enter the START state for byte 0x%02h", data);
 
             @(negedge clk);
@@ -52,6 +52,12 @@ module uart_tx_tb;
 
             // Prove that the DUT uses its latched copy during the frame.
             ext_data_in = ~data;
+
+            // The registered pin follows entry into START by one clock.
+            @(posedge clk);
+            #1;
+            if (tx !== 1'b0)
+                $fatal(1, "Registered TX did not assert the start bit");
         end
     endtask
 
