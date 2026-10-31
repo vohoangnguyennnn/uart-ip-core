@@ -273,6 +273,35 @@ remains concise:
 
 **[Open the UART Simulation and Verification Report →](docs/README.md)**
 
+## Vivado IP Package
+
+The reusable Vivado 2024.1 package is in [`ip_repo/`](ip_repo/), with VLNV
+`vohoangnguyennnn:user:uart_core:1.0` and HDL top module `uart_top`.
+
+To use it in another project:
+
+1. Clone this repository and open the target Vivado project.
+2. Open **Settings > IP > Repository** and add this repository's `ip_repo`
+   directory, then refresh the IP Catalog.
+3. In a Block Design, choose **Add IP** and search for **UART 8N1 Core**.
+4. Connect `clk`, synchronous active-HIGH `rst`, serial RX/TX, and the register
+   interface to your controller. Generate output products and validate the design.
+5. Apply clock timing constraints and board-specific pin constraints in the
+   integrating project, then run synthesis and implementation as required.
+
+The package declares compatibility with Artix-7, Zynq-7000 PL, and Spartan-7.
+The package has been instantiated and synthesized in an Artix-7 test project;
+the other declared families have not yet been validated. No board-level or
+timing-closure result is claimed.
+
+The register interface is not APB or AXI and requires a matching wrapper for
+CPU bus integration. There is no FIFO or interrupt output.
+
+Keep the entire `ip_repo` directory when moving or distributing the package.
+Its `src/` files are copies of `rtl/`; after changing RTL, update and repackage
+the IP, then repeat verification. Avoid registering multiple packages with the
+same VLNV from different repository paths in the test project.
+
 ## License
 
 This project is released under the [MIT License](LICENSE).
