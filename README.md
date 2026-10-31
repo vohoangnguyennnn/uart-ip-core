@@ -123,6 +123,7 @@ In the diagrams, `BIT_DONE` means `baud_tick && (bit_tick_cnt == 15)`, while
 - One-cycle `rx_valid` and framing-error events.
 - Sticky receive-ready and framing-error status at the top level.
 - Protection against overwriting an active TX frame.
+- Registered TX pin and a one-byte RX buffer with sticky overrun detection.
 - Module-level and end-to-end loopback verification.
 - Repeatable command-line and QuestaSim waveform flows.
 
@@ -137,18 +138,41 @@ APB, AXI, or Wishbone interface.
 | `0` | `BAUD_DATA` | Read/write | 16× oversampling divider |
 | `1` | `STATUS/ENABLE` | Read/write | Write bit 0 to enable the UART; read control and status |
 | `2` | `TX_DATA` | Read/write | Write bits `[7:0]` to transmit; writes are ignored while disabled or busy |
-| `3` | `RX_DATA` | Read | Read bits `[7:0]`; reading clears `rx_ready` |
+| `3` | `RX_DATA` | Read | Read the buffered byte in bits `[7:0]`; clears ready unless a new byte arrives on the same edge |
 
 Status bits returned from address `1`:
 
 | Bit | Name | Meaning |
 |---:|---|---|
 | `0` | `enable` | UART enable state |
-| `1` | `tx_busy` | A transmit frame is in progress |
+| `1` | `tx_busy` | A transmit request is pending or a frame is in progress |
 | `2` | `rx_ready` | A valid received byte is available; sticky until `RX_DATA` is read |
 | `3` | `frame_error_sticky` | An invalid stop bit was detected; sticky until status is read |
+| `4` | `overrun_sticky` | A valid byte was discarded because the RX buffer was full; sticky until status is read |
 
-Disabling the UART resets the TX/RX cores and aborts any partial frame.
+The interface uses register indices, not byte addresses. With inputs stable
+around a rising clock edge, `we` performs one write and `re` performs one read;
+registered `read_data` is available after that edge. Each asserted edge counts
+as an access, including the clear-on-read effects. Read bits `[31:5]` of STATUS
+and `[31:8]` of RX_DATA are zero.
+
+When the RX buffer is full, the old unread byte is retained and a new valid
+byte is discarded with overrun set. If RX_DATA is read on the same edge that
+the top accepts a new byte, the read returns the old byte, the buffer retains
+the new byte, and ready remains set without overrun. Invalid-stop frames
+leave the last good RX-core output and the top-level buffer unchanged.
+Reading STATUS returns the existing flags and clears them; a simultaneous
+new error takes priority over clearing and remains visible on the next read.
+Reading RX_DATA while ready is zero does not provide a new valid byte.
+
+TX writes while busy are ignored and are not queued. Software must wait for
+busy to clear before writing another byte. The registered TX waveform follows
+the TX state and datapath by one system clock; core busy follows the FSM.
+The free-running baud tick can shorten the start bit by up to one oversampling
+tick relative to the nominal bit period.
+
+Disabling the UART synchronously resets the TX/RX cores, aborts any partial
+frame, and clears the RX buffer, ready, and sticky error flags.
 
 ## Baud-Rate Programming
 
@@ -175,12 +199,14 @@ uart-ip-core/
 │   ├── uart_baud_gen_tb.v
 │   ├── uart_tx_tb.v
 │   ├── uart_rx_tb.v
-│   └── uart_top_tb.v
+│   ├── uart_top_tb.v
+│   └── uart_regression_tb.v
 ├── sim/
 │   ├── Makefile
 │   └── wave.do
 ├── docs/
 │   ├── README.md
+│   ├── bug_log.md
 │   └── images/
 ├── LICENSE
 └── README.md
@@ -201,7 +227,7 @@ cd uart-ip-core/sim
 make test
 ```
 
-The target runs all four self-checking testbenches and stops with a non-zero
+The target runs all five self-checking testbenches and stops with a non-zero
 exit code if compilation fails, an assertion fires, or a watchdog timeout is
 reached.
 
@@ -211,6 +237,7 @@ reached.
 make TB=uart_tx_tb
 make TB=uart_rx_tb
 make TB=uart_top_tb
+make TB=uart_regression_tb
 ```
 
 Running `make` without a `TB` override selects `uart_baud_gen_tb`.
@@ -236,6 +263,10 @@ The directed self-checking suite covers:
 - Register read/write behavior and sticky status flags.
 - End-to-end TX-to-RX loopback through `uart_top`.
 - Rejection of a TX-data write while a frame is active.
+- Back-to-back TX writes and preservation of good RX data after a bad stop bit.
+- RX overrun, simultaneous read/arrival, error set-over-clear, and disable recovery.
+
+Root causes and fixes are recorded in [the bug log](docs/bug_log.md).
 
 Detailed evidence is kept outside this overview so the project landing page
 remains concise:
